@@ -1,0 +1,97 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Rowan Young"
+date: "March 11, 2017"
+output: html_document
+---
+
+##Practical Machine Learning Course Project  
+Rowan Young  
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.  
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.  
+
+"Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E)."  
+
+##Reading in the Training and Testing Data Sets  
+```{r cache=TRUE, echo=FALSE}
+require(caret)
+require(randomForest)
+
+set.seed(1234)
+
+#Reads in data sets and replaces null values with empty values
+training <- read.csv("~/coursera/Practical Machine Learning Course Project/pml-training.csv")
+testing <- read.csv("~/coursera/Practical Machine Learning Course Project/pml-testing.csv")
+```
+
+##Cleaning Up and Partitioning the Data Sets  
+```{r cache=TRUE}
+head(training)
+```
+When we are selecting a model, removing variables that will not be relevant to the final model is very important. We can see that the first seven columns will not be relevant to the model. We also want to make the "classe" variable a factor variable.  
+
+```{r cache=TRUE}
+#Makes the classe variable a factor variable
+training$classe <- as.factor(training$classe)
+
+#Remove the first seven columns (X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, and num_window)
+training <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+```
+
+There are still a large amount of variables within this data set. We can clean up the data set by removing the variables with zero or near zero variance. We do possibly risk removing predictors that are informative though.  
+```{r cache=TRUE}
+#List of variables with zero or near zero variance
+nzv <- nearZeroVar(training)
+
+#Applying nzv to remove variables from the training and testing data sets
+training <- training[,-nzv]
+testing <- testing[,-nzv]
+```
+
+Some more clean up we can do is to remove variables with null values.  
+```{r cache=TRUE}
+naValues <- apply(training, 2, function(x) { sum(is.na(x)) } )
+
+training <- training[,which(naValues==0)]
+testing <- testing[,which(naValues==0)]    
+
+testing <- testing[,-c(53)]
+```
+
+Lastly we will create a data partition on the training data set to test the accuracy of our model with a cross validation data set.  
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+
+subsetTrain <- training[inTrain,]
+subsetTest <- training[-inTrain,]
+```
+
+##Creating a Random Forest Model  
+Because we are trying to classify what type of lift the subjects performed, we will chose a random forest model.  
+```{r cache=TRUE}
+rfModel <- randomForest(subsetTrain[,1:ncol(subsetTrain)-1], subsetTrain[,ncol(subsetTrain)])
+rfModel
+```
+
+After our model is built, we can then test it on our subsetted test data. With this model, we get a 99.14% accuracy rate.  
+```{r cache=TRUE}
+pred_rf <- predict(rfModel, newdata = subsetTest, na.action = na.omit)
+confusionMatrix(pred_rf, subsetTest$classe)
+
+postResample(pred_rf, subsetTest$classe)
+```
+
+##Applying the Random Forest Model to the Testing Data Set  
+Using the random forest model from our training data set, we can apply this to our testing data set and get the following results.  
+```{r cache=TRUE}
+predictTesting <- predict(rfModel, newdata = testing, na.action = na.omit)
+
+#Adding the predicted class to the testing data set (for reference)
+testing$classe <- predictTesting
+
+#Final output
+predictTesting
+```
